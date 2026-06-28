@@ -6,6 +6,40 @@ export type Task = {
   done: boolean;
 };
 
+export type KeyTerm = {
+  term: string;
+  description: string;
+};
+
+export type QuizChoice = {
+  id: string;
+  label: string;
+  correct: boolean;
+};
+
+export type QuizQuestion = {
+  id: string;
+  question: string;
+  choices: QuizChoice[];
+  explanation: string;
+};
+
+export type Lesson = {
+  id: string;
+  title: string;
+  summary: string;
+  body: string[];
+  keyTerms: KeyTerm[];
+  quiz: QuizQuestion[];
+  practicePrompt: string;
+};
+
+export type Resource = {
+  title: string;
+  source: string;
+  url: string;
+};
+
 export type Topic = {
   id: string;
   title: string;
@@ -16,11 +50,14 @@ export type Topic = {
   careerValue: string;
   accent: string;
   tasks: Task[];
+  lessons: Lesson[];
+  resources: Resource[];
 };
 
 export type StoredLearningState = {
   topics: Topic[];
   tasks: Record<string, Task[]>;
   notes: Record<string, string>;
+  quizAnswers: Record<string, Record<string, string>>;
   lastUpdated: string;
 };

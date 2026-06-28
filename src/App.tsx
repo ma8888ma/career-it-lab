@@ -4,16 +4,20 @@ import {
   CalendarCheck,
   Check,
   ChevronRight,
+  CircleCheck,
+  CircleX,
+  ExternalLink,
   Gauge,
   GraduationCap,
   ListTodo,
+  PencilLine,
   RotateCcw,
   Search,
   Star,
   Target,
 } from "lucide-react";
 import { loadLearningState, resetLearningState, saveLearningState } from "./storage";
-import type { StoredLearningState, Topic, TopicStatus } from "./types";
+import type { QuizQuestion, StoredLearningState, Topic, TopicStatus } from "./types";
 
 const statuses: TopicStatus[] = ["未着手", "学習中", "復習中", "実務演習"];
 
@@ -29,10 +33,21 @@ const getPriorityTopic = (topics: Topic[]) =>
     return a.understanding - b.understanding;
   })[0];
 
+const getQuizStats = (topic: Topic, answers: Record<string, string>) => {
+  const questions = topic.lessons.flatMap((lesson) => lesson.quiz);
+  const correct = questions.filter((question) => {
+    const selectedChoiceId = answers[question.id];
+    return question.choices.some((choice) => choice.id === selectedChoiceId && choice.correct);
+  }).length;
+
+  return { correct, total: questions.length };
+};
+
 function App() {
   const [state, setState] = useState<StoredLearningState>(() => loadLearningState());
   const [selectedTopicId, setSelectedTopicId] = useState(state.topics[0]?.id ?? "");
   const [query, setQuery] = useState("");
+  const [detailTab, setDetailTab] = useState<"progress" | "learn">("progress");
 
   useEffect(() => {
     saveLearningState(state);
@@ -87,6 +102,20 @@ function App() {
     setState((current) => ({
       ...current,
       notes: { ...current.notes, [topicId]: note },
+      lastUpdated: new Date().toISOString(),
+    }));
+  };
+
+  const answerQuiz = (topicId: string, questionId: string, choiceId: string) => {
+    setState((current) => ({
+      ...current,
+      quizAnswers: {
+        ...current.quizAnswers,
+        [topicId]: {
+          ...(current.quizAnswers[topicId] ?? {}),
+          [questionId]: choiceId,
+        },
+      },
       lastUpdated: new Date().toISOString(),
     }));
   };
@@ -188,13 +217,17 @@ function App() {
           </div>
 
           <TopicDetail
+            activeTab={detailTab}
             note={state.notes[selectedTopic.id] ?? ""}
+            onAnswerQuiz={(questionId, choiceId) => answerQuiz(selectedTopic.id, questionId, choiceId)}
             onNoteChange={(note) => updateNote(selectedTopic.id, note)}
             onStatusChange={(status) => updateTopic(selectedTopic.id, (topic) => ({ ...topic, status }))}
+            onTabChange={setDetailTab}
             onToggleTask={(taskId) => toggleTask(selectedTopic.id, taskId)}
             onUnderstandingChange={(understanding) =>
               updateTopic(selectedTopic.id, (topic) => ({ ...topic, understanding }))
             }
+            quizAnswers={state.quizAnswers[selectedTopic.id] ?? {}}
             topic={selectedTopic}
           />
         </section>
@@ -236,23 +269,32 @@ function ProgressBar({ accent, progress }: ProgressBarProps) {
 }
 
 type TopicDetailProps = {
+  activeTab: "progress" | "learn";
   note: string;
+  onAnswerQuiz: (questionId: string, choiceId: string) => void;
   onNoteChange: (note: string) => void;
   onStatusChange: (status: TopicStatus) => void;
+  onTabChange: (tab: "progress" | "learn") => void;
   onToggleTask: (taskId: string) => void;
   onUnderstandingChange: (understanding: number) => void;
+  quizAnswers: Record<string, string>;
   topic: Topic;
 };
 
 function TopicDetail({
+  activeTab,
   note,
+  onAnswerQuiz,
   onNoteChange,
   onStatusChange,
+  onTabChange,
   onToggleTask,
   onUnderstandingChange,
+  quizAnswers,
   topic,
 }: TopicDetailProps) {
   const progress = getProgress(topic);
+  const quizStats = getQuizStats(topic, quizAnswers);
 
   return (
     <aside className="detail-panel" aria-label="テーマ詳細">
@@ -262,9 +304,71 @@ function TopicDetail({
         </span>
         <h2>{topic.title}</h2>
         <ProgressBar accent={topic.accent} progress={progress} />
-        <p>{progress}% 完了</p>
+        <p>
+          {progress}% 完了 / クイズ {quizStats.correct}/{quizStats.total}
+        </p>
       </div>
 
+      <div className="detail-tabs" role="tablist" aria-label="テーマ詳細の表示切り替え">
+        <button
+          aria-selected={activeTab === "progress"}
+          className={activeTab === "progress" ? "detail-tab is-active" : "detail-tab"}
+          onClick={() => onTabChange("progress")}
+          role="tab"
+          type="button"
+        >
+          進捗
+        </button>
+        <button
+          aria-selected={activeTab === "learn"}
+          className={activeTab === "learn" ? "detail-tab is-active" : "detail-tab"}
+          onClick={() => onTabChange("learn")}
+          role="tab"
+          type="button"
+        >
+          学ぶ
+        </button>
+      </div>
+
+      {activeTab === "progress" ? (
+        <ProgressView
+          note={note}
+          onNoteChange={onNoteChange}
+          onStatusChange={onStatusChange}
+          onToggleTask={onToggleTask}
+          onUnderstandingChange={onUnderstandingChange}
+          topic={topic}
+        />
+      ) : (
+        <LearningView
+          onAnswerQuiz={onAnswerQuiz}
+          quizAnswers={quizAnswers}
+          topic={topic}
+        />
+      )}
+    </aside>
+  );
+}
+
+type ProgressViewProps = {
+  note: string;
+  onNoteChange: (note: string) => void;
+  onStatusChange: (status: TopicStatus) => void;
+  onToggleTask: (taskId: string) => void;
+  onUnderstandingChange: (understanding: number) => void;
+  topic: Topic;
+};
+
+function ProgressView({
+  note,
+  onNoteChange,
+  onStatusChange,
+  onToggleTask,
+  onUnderstandingChange,
+  topic,
+}: ProgressViewProps) {
+  return (
+    <>
       <section className="control-section">
         <div className="section-title">
           <BookOpenCheck size={18} aria-hidden="true" />
@@ -334,7 +438,118 @@ function TopicDetail({
           value={note}
         />
       </section>
-    </aside>
+    </>
+  );
+}
+
+type LearningViewProps = {
+  onAnswerQuiz: (questionId: string, choiceId: string) => void;
+  quizAnswers: Record<string, string>;
+  topic: Topic;
+};
+
+function LearningView({ onAnswerQuiz, quizAnswers, topic }: LearningViewProps) {
+  return (
+    <div className="learning-view">
+      {topic.lessons.map((lesson) => (
+        <section className="lesson-card" key={lesson.id}>
+          <div className="section-title">
+            <BookOpenCheck size={18} aria-hidden="true" />
+            <h3>{lesson.title}</h3>
+          </div>
+          <p className="lesson-summary">{lesson.summary}</p>
+          <div className="lesson-body">
+            {lesson.body.map((paragraph) => (
+              <p key={paragraph}>{paragraph}</p>
+            ))}
+          </div>
+
+          <div className="term-list" aria-label="重要語句">
+            {lesson.keyTerms.map((term) => (
+              <div className="term-item" key={term.term}>
+                <strong>{term.term}</strong>
+                <span>{term.description}</span>
+              </div>
+            ))}
+          </div>
+
+          <div className="practice-box">
+            <PencilLine size={18} aria-hidden="true" />
+            <p>{lesson.practicePrompt}</p>
+          </div>
+
+          <div className="quiz-list">
+            {lesson.quiz.map((question) => (
+              <QuizBlock
+                key={question.id}
+                onAnswer={(choiceId) => onAnswerQuiz(question.id, choiceId)}
+                question={question}
+                selectedChoiceId={quizAnswers[question.id]}
+              />
+            ))}
+          </div>
+        </section>
+      ))}
+
+      <section className="control-section">
+        <div className="section-title">
+          <ExternalLink size={18} aria-hidden="true" />
+          <h3>公式リンク</h3>
+        </div>
+        <div className="resource-list">
+          {topic.resources.map((resource) => (
+            <a href={resource.url} key={resource.url} rel="noreferrer" target="_blank">
+              <span>
+                <strong>{resource.title}</strong>
+                <small>{resource.source}</small>
+              </span>
+              <ExternalLink size={16} aria-hidden="true" />
+            </a>
+          ))}
+        </div>
+      </section>
+    </div>
+  );
+}
+
+type QuizBlockProps = {
+  onAnswer: (choiceId: string) => void;
+  question: QuizQuestion;
+  selectedChoiceId?: string;
+};
+
+function QuizBlock({ onAnswer, question, selectedChoiceId }: QuizBlockProps) {
+  const selectedChoice = question.choices.find((choice) => choice.id === selectedChoiceId);
+
+  return (
+    <article className="quiz-block">
+      <h4>{question.question}</h4>
+      <div className="quiz-choices">
+        {question.choices.map((choice) => {
+          const isSelected = selectedChoiceId === choice.id;
+          const resultClass = isSelected ? (choice.correct ? " is-correct" : " is-wrong") : "";
+
+          return (
+            <button
+              className={`quiz-choice${resultClass}`}
+              key={choice.id}
+              onClick={() => onAnswer(choice.id)}
+              type="button"
+            >
+              <span>{choice.label}</span>
+              {isSelected && choice.correct ? <CircleCheck size={16} aria-hidden="true" /> : null}
+              {isSelected && !choice.correct ? <CircleX size={16} aria-hidden="true" /> : null}
+            </button>
+          );
+        })}
+      </div>
+      {selectedChoice ? (
+        <p className={selectedChoice.correct ? "quiz-feedback is-correct" : "quiz-feedback is-wrong"}>
+          {selectedChoice.correct ? "正解: " : "もう一度確認: "}
+          {question.explanation}
+        </p>
+      ) : null}
+    </article>
   );
 }
 

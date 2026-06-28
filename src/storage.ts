@@ -7,6 +7,7 @@ const createInitialState = (): StoredLearningState => ({
   topics: initialTopics,
   tasks: Object.fromEntries(initialTopics.map((topic) => [topic.id, topic.tasks])),
   notes: Object.fromEntries(initialTopics.map((topic) => [topic.id, ""])),
+  quizAnswers: Object.fromEntries(initialTopics.map((topic) => [topic.id, {}])),
   lastUpdated: new Date().toISOString(),
 });
 
@@ -21,6 +22,8 @@ const hydrateTopics = (state: StoredLearningState): Topic[] =>
       understanding: storedTopic?.understanding ?? topic.understanding,
       nextAction: storedTopic?.nextAction ?? topic.nextAction,
       tasks: mergeTasks(topic.tasks, storedTasks),
+      lessons: topic.lessons,
+      resources: topic.resources,
     };
   });
 
@@ -50,6 +53,10 @@ export const loadLearningState = (): StoredLearningState => {
       notes: {
         ...Object.fromEntries(initialTopics.map((topic) => [topic.id, ""])),
         ...(parsedState.notes ?? {}),
+      },
+      quizAnswers: {
+        ...Object.fromEntries(initialTopics.map((topic) => [topic.id, {}])),
+        ...(parsedState.quizAnswers ?? {}),
       },
       lastUpdated: parsedState.lastUpdated ?? new Date().toISOString(),
     };
