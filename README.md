@@ -31,3 +31,9 @@ npm run build
 2. このプロジェクトを `main` ブランチへpushする
 3. GitHubのリポジトリ設定で Pages の Source を `GitHub Actions` にする
 4. Actions の `Deploy to GitHub Pages` が完了すると公開URLが発行される
+
+## GitHub Pagesで `/src/main.tsx` が404になる場合
+
+Pages の Source が `Deploy from a branch` になっている可能性があります。その場合、ビルド前の `index.html` が配信され、開発用の `/src/main.tsx` を読みに行って404になります。
+
+GitHub の `Settings > Pages` で Source を `GitHub Actions` に変更し、`Deploy to GitHub Pages` workflow を再実行してください。公開されるHTMLは `dist/index.html` で、JS/CSSは `./assets/...` から読み込まれます。
